@@ -4,5 +4,26 @@
   "temperature": 0.4,
   "max_tokens": 800,
   "use_tools": true,
-  "workshop_mode": true
+  "workshop_mode": true,
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1M_tokens",
+    "source": "https://docs.compactif.ai/pricing/",
+    "models": {
+      "cai-llama-4-scout-slim": { "input": 0.07, "output": 0.10 },
+      "llama-4-scout": { "input": 0.10, "output": 0.14 },
+      "cai-llama-3-3-70b-slim": { "input": 0.11, "output": 0.21 },
+      "llama-3-3-70b": { "input": 0.15, "output": 0.31 },
+      "cai-llama-3-1-8b-slim": { "input": 0.02, "output": 0.07 },
+      "llama-3-1-8b": { "input": 0.02, "output": 0.09 },
+      "cai-mistral-small-3-1-slim": { "input": 0.05, "output": 0.08 },
+      "mistral-small-3-1": { "input": 0.11, "output": 0.17 },
+      "nemotron-3-nano-omni": { "input": 0.20, "output": 0.80 },
+      "gpt-oss-20b": { "input": 0.03, "output": 0.10 },
+      "gpt-oss-120b": { "input": 0.05, "output": 0.23 },
+      "hypernova-60b": { "input": 0.04, "output": 0.14 },
+      "blackstar-10b": { "input": 0.02, "output": 0.07 },
+      "glm-5-1": { "input": 0.95, "output": 3.15 }
+    }
+  }
 }

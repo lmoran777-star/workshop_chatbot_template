@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 import requests
 import streamlit as st
@@ -231,7 +232,7 @@ ALLOWED_MATH_NAMES = {
 
 def safe_calculator(expression: str) -> str:
     allowed_nodes = (
-        ast.Expression, ast.BinOp, ast.UnaryOp, ast.Num, ast.Constant, ast.Add, ast.Sub,
+        ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant, ast.Add, ast.Sub,
         ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.USub, ast.UAdd, ast.Load, ast.Call, ast.Name,
     )
     try:
@@ -247,12 +248,23 @@ def safe_calculator(expression: str) -> str:
         return f"Calculator error: {exc}"
 
 
+def format_company_datetime(company: Dict[str, Any]) -> str:
+    tz_name = company.get("timezone", "Europe/Madrid")
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz_name = "Europe/Madrid"
+        tz = ZoneInfo(tz_name)
+    now = datetime.now(tz)
+    return now.strftime(f"%Y-%m-%d %H:%M:%S %Z ({tz_name})")
+
+
 def execute_tool(name: str, arguments: Dict[str, Any], chunks: List[Dict[str, str]], company: Dict[str, Any]) -> str:
     if name == "calculator":
         return safe_calculator(str(arguments.get("expression", "")))
 
     if name == "current_datetime":
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return format_company_datetime(company)
 
     if name == "search_company_data":
         query = str(arguments.get("query", ""))
@@ -299,7 +311,7 @@ def build_tools(tools_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "current_datetime",
-                "description": "Get the current date and time.",
+                "description": "Get the current date and time in the company timezone (Europe/Madrid, Spain).",
                 "parameters": {"type": "object", "properties": {}},
             },
         })
@@ -510,15 +522,50 @@ def chat_with_tools(
     return "I used the available tools, but I need a bit more information to finish the answer.", metrics
 
 
+def estimate_request_cost(
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    model_cfg: Dict[str, Any],
+) -> Optional[float]:
+    rates = model_cfg.get("pricing", {}).get("models", {}).get(normalize_model(model))
+    if not rates:
+        return None
+    input_rate = float(rates.get("input", 0))
+    output_rate = float(rates.get("output", 0))
+    return (prompt_tokens / 1_000_000) * input_rate + (completion_tokens / 1_000_000) * output_rate
+
+
+def format_cost_usd(cost: Optional[float]) -> str:
+    if cost is None:
+        return "—"
+    if cost < 0.01:
+        return f"${cost:.4f}"
+    return f"${cost:.4f}"
+
+
+def attach_request_cost(metrics: Dict[str, Any], model_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    metrics = dict(metrics)
+    metrics["request_cost_usd"] = estimate_request_cost(
+        str(metrics.get("model", "")),
+        int(metrics.get("prompt_tokens", 0)),
+        int(metrics.get("completion_tokens", 0)),
+        model_cfg,
+    )
+    return metrics
+
+
 def metrics_text(metrics: Optional[Dict[str, Any]]) -> str:
     if not metrics:
         return ""
     source = "API" if metrics.get("usage_source") == "api" else "est."
     tools_called = metrics.get("tools_called") or []
     called_text = ", ".join(tools_called) if tools_called else "none"
+    cost_text = format_cost_usd(metrics.get("request_cost_usd"))
     return (
         f"{metrics.get('response_time_s', 0):.2f}s · "
         f"{metrics.get('total_tokens', 0)} tokens ({source}) · "
+        f"cost {cost_text} · "
         f"model {metrics.get('model', 'unknown')} · "
         f"tools: {called_text}"
     )
@@ -534,12 +581,14 @@ def inject_custom_css():
         """
         <style>
             .block-container {
-                padding-top: 1.5rem;
-                padding-bottom: 2rem;
-                max-width: 820px;
+                padding-top: 1rem;
+                padding-bottom: 1.5rem;
+                max-width: 1100px;
+                padding-left: 2rem;
+                padding-right: 2rem;
             }
             [data-testid="stSidebar"] {
-                background: linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
+                background: #FFFFFF;
                 border-right: 1px solid #E2E8F0;
             }
             [data-testid="stSidebar"] .block-container {
@@ -552,60 +601,6 @@ def inject_custom_css():
                 text-transform: uppercase;
                 color: #64748B;
                 margin: 1.25rem 0 0.5rem 0;
-            }
-            .hero-card {
-                background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFF 100%);
-                border: 1px solid #E2E8F0;
-                border-radius: 18px;
-                padding: 1.25rem 1.5rem;
-                margin-bottom: 1rem;
-                box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
-            }
-            .hero-title {
-                font-size: 1.85rem;
-                font-weight: 700;
-                color: #0F172A;
-                margin: 0 0 0.35rem 0;
-                line-height: 1.2;
-            }
-            .hero-subtitle {
-                font-size: 0.98rem;
-                color: #475569;
-                margin: 0 0 0.85rem 0;
-                line-height: 1.5;
-            }
-            .badge-row {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.45rem;
-            }
-            .badge {
-                display: inline-block;
-                padding: 0.22rem 0.65rem;
-                border-radius: 999px;
-                font-size: 0.78rem;
-                font-weight: 600;
-                border: 1px solid transparent;
-            }
-            .badge-company {
-                background: #EEF2FF;
-                color: #4338CA;
-                border-color: #C7D2FE;
-            }
-            .badge-knowledge {
-                background: #ECFDF5;
-                color: #047857;
-                border-color: #A7F3D0;
-            }
-            .badge-live {
-                background: #F0FDF4;
-                color: #15803D;
-                border-color: #BBF7D0;
-            }
-            .badge-demo {
-                background: #FFF7ED;
-                color: #C2410C;
-                border-color: #FED7AA;
             }
             .metrics-pill {
                 display: inline-block;
@@ -620,17 +615,13 @@ def inject_custom_css():
             .hint-label {
                 font-size: 0.82rem;
                 color: #64748B;
-                margin: 0.5rem 0 0.65rem 0;
+                margin: 0.25rem 0 0.5rem 0;
             }
             div[data-testid="stChatMessage"] {
-                border-radius: 14px;
-                padding: 0.15rem 0.25rem;
-            }
-            div[data-testid="stChatInput"] {
-                border-radius: 14px;
+                border-radius: 12px;
             }
             div[data-testid="stChatInput"] textarea {
-                border-radius: 14px !important;
+                border-radius: 12px !important;
             }
             .stButton > button[kind="secondary"] {
                 border-radius: 999px;
@@ -638,13 +629,6 @@ def inject_custom_css():
                 background: #FFFFFF;
                 color: #334155;
                 font-size: 0.84rem;
-                padding: 0.35rem 0.9rem;
-                transition: all 0.15s ease;
-            }
-            .stButton > button[kind="secondary"]:hover {
-                border-color: #6366F1;
-                color: #4338CA;
-                background: #EEF2FF;
             }
             [data-testid="stSidebar"] .stButton > button {
                 border-radius: 10px;
@@ -660,39 +644,21 @@ def render_header(company: Dict[str, Any], logo_path: Optional[Path], chunk_coun
     bot_name = company.get("bot_name", "Workshop Chatbot")
     bot_goal = company.get("bot_goal", "A simple chatbot template students can personalize.")
     company_name = company.get("company_name", "Student company")
+    status = "Demo mode" if demo_mode else "Live"
 
-    logo_col, text_col = st.columns([1, 5], gap="medium")
+    logo_col, info_col = st.columns([1, 10], vertical_alignment="center")
     with logo_col:
         if logo_path:
-            st.image(str(logo_path), width=88)
+            st.image(str(logo_path), width=56)
         else:
-            st.markdown(
-                '<div style="width:88px;height:88px;border-radius:18px;'
-                'background:linear-gradient(135deg,#6366F1,#8B5CF6);display:flex;'
-                'align-items:center;justify-content:center;font-size:2rem;">🤖</div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown("##### 🤖")
 
-    with text_col:
-        status_badge = (
-            '<span class="badge badge-demo">Demo mode</span>'
-            if demo_mode
-            else '<span class="badge badge-live">Live</span>'
-        )
-        st.markdown(
-            f"""
-            <div class="hero-card">
-                <div class="hero-title">{bot_name}</div>
-                <div class="hero-subtitle">{bot_goal}</div>
-                <div class="badge-row">
-                    <span class="badge badge-company">{company_name}</span>
-                    <span class="badge badge-knowledge">{chunk_count} knowledge chunks</span>
-                    {status_badge}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    with info_col:
+        st.markdown(f"**{bot_name}**")
+        st.caption(f"{company_name} · {chunk_count} knowledge chunks · {status}")
+        st.caption(bot_goal)
+
+    st.divider()
 
 
 MODEL_CHOICES = ["glm-5-1", "hypernova-60b"]
@@ -779,6 +745,7 @@ def record_run(question: str, metrics: Dict[str, Any]):
 
     tools_sent = metrics.get("tools_sent") or []
     tools_called = metrics.get("tools_called") or []
+    cost = metrics.get("request_cost_usd")
     st.session_state.runs.append({
         "#": len(st.session_state.runs) + 1,
         "Question": (question[:40] + "…") if len(question) > 40 else question,
@@ -788,26 +755,66 @@ def record_run(question: str, metrics: Dict[str, Any]):
         "Prompt tok": int(metrics.get("prompt_tokens", 0)),
         "Completion tok": int(metrics.get("completion_tokens", 0)),
         "Total tok": int(metrics.get("total_tokens", 0)),
+        "Cost ($)": round(float(cost), 6) if cost is not None else None,
         "Tools called": ", ".join(tools_called) if tools_called else "—",
         "Source": "API" if metrics.get("usage_source") == "api" else "estimated",
     })
 
 
-def render_comparison_lab(demo_mode: bool):
-    runs = st.session_state.get("runs") or []
-    if not runs:
+def render_pricing_reference(model_cfg: Dict[str, Any]):
+    pricing_models = model_cfg.get("pricing", {}).get("models", {})
+    if not pricing_models:
         return
 
-    st.markdown("---")
-    st.markdown("### 📊 Comparison lab")
+    st.caption("Workshop models (USD per 1M tokens):")
+    for model_name in MODEL_CHOICES:
+        rates = pricing_models.get(model_name)
+        if rates:
+            st.caption(
+                f"`{model_name}`: input ${rates.get('input', 0)}/M · output ${rates.get('output', 0)}/M"
+            )
+
+    with st.expander("All CompactifAI model rates"):
+        rows = [
+            {
+                "Model": name,
+                "Input ($/1M)": rates.get("input", 0),
+                "Output ($/1M)": rates.get("output", 0),
+            }
+            for name, rates in pricing_models.items()
+        ]
+        if pd is not None:
+            st.dataframe(pd.DataFrame(rows).set_index("Model"), use_container_width=True)
+        else:
+            st.table(rows)
+        source = model_cfg.get("pricing", {}).get("source")
+        if source:
+            st.caption(f"Source: {source}. Edit `config/model.json` if prices change.")
+
+
+def render_comparison_lab(demo_mode: bool, model_cfg: Dict[str, Any]):
+    runs = st.session_state.get("runs") or []
+
+    if not runs:
+        st.info("Ask a few questions in the **Chat** tab first. Each answer is logged here so you can compare tokens, time, and cost.")
+        render_pricing_reference(model_cfg)
+        with st.expander("How to run a good experiment"):
+            st.markdown(
+                "- **Tool cost:** ask one question with all tools OFF, then ON. Compare *Prompt tok* and *Cost ($)*.\n"
+                "- **Model cost:** ask the *same* question on `glm-5-1`, then `hypernova-60b`. Compare *Total tok*, *Time (s)*, and *Cost ($)*.\n"
+                "- **Tool use:** ask a math question with the calculator ON vs OFF and watch *Tools called*.\n"
+                "- Keep the question identical so only one variable changes at a time."
+            )
+        return
+
     st.caption(
-        "Every message is logged here. Compare rows to see how tools and models change "
-        "token usage and response time."
+        "Compare rows to see how tools and models change token usage, response time, and cost. "
+        "Cost = (prompt tokens × input rate + completion tokens × output rate) from `config/model.json`."
     )
 
     if len(runs) >= 2:
         last, prev = runs[-1], runs[-2]
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         c1.metric(
             "Total tokens",
             last["Total tok"],
@@ -820,8 +827,19 @@ def render_comparison_lab(demo_mode: bool):
             delta=round(last["Time (s)"] - prev["Time (s)"], 2),
             delta_color="inverse",
         )
-        c3.metric("Tools on", last["Tools on"], delta=last["Tools on"] - prev["Tools on"])
-        st.caption("Deltas compare the latest run with the previous one. Lower tokens and time are better.")
+        last_cost = last.get("Cost ($)") or 0.0
+        prev_cost = prev.get("Cost ($)") or 0.0
+        c3.metric(
+            "Cost (USD)",
+            format_cost_usd(last_cost),
+            delta=round(last_cost - prev_cost, 6) if last.get("Cost ($)") is not None else None,
+            delta_color="inverse",
+        )
+        c4.metric("Tools on", last["Tools on"], delta=last["Tools on"] - prev["Tools on"])
+        st.caption("Deltas compare the latest run with the previous one. Lower tokens, time, and cost are better.")
+
+    session_total = sum((r.get("Cost ($)") or 0.0) for r in runs)
+    st.metric("Session total cost", format_cost_usd(session_total))
 
     if pd is not None:
         df = pd.DataFrame(runs).set_index("#")
@@ -844,33 +862,21 @@ def render_comparison_lab(demo_mode: bool):
 
     with st.expander("How to run a good experiment"):
         st.markdown(
-            "- **Tool cost:** ask one question with all tools OFF, then ON. Compare *Prompt tok*.\n"
-            "- **Model cost:** ask the *same* question on `glm-5-1`, then `hypernova-60b`. Compare *Total tok* and *Time (s)*.\n"
+            "- **Tool cost:** ask one question with all tools OFF, then ON. Compare *Prompt tok* and *Cost ($)*.\n"
+            "- **Model cost:** ask the *same* question on `glm-5-1`, then `hypernova-60b`. Compare *Total tok*, *Time (s)*, and *Cost ($)*.\n"
             "- **Tool use:** ask a math question with the calculator ON vs OFF and watch *Tools called*.\n"
             "- Keep the question identical so only one variable changes at a time."
         )
+    render_pricing_reference(model_cfg)
 
 
-def main():
-    st.set_page_config(page_title="Workshop Chatbot Template", page_icon="🤖", layout="wide")
-
-    inject_custom_css()
-
-    company = load_json(CONFIG_DIR / "company.json", {})
-    personality = load_json(CONFIG_DIR / "personality.json", {})
-    tools_cfg = load_json(CONFIG_DIR / "tools.json", {})
-    model_cfg = load_json(CONFIG_DIR / "model.json", {})
-
-    logo_path = find_company_logo()
-    chunks = load_company_knowledge()
-    demo_mode = not bool(get_secret("COMPACTIF_API_KEY"))
-
-    runtime_tools_cfg = render_sidebar(company, tools_cfg, model_cfg)
-    render_header(company, logo_path, len(chunks), demo_mode)
-
-    if "messages" not in st.session_state:
-        reset_chat(company.get("welcome_message", "Hello! How can I help?"))
-
+def render_chat_tab(
+    company: Dict[str, Any],
+    personality: Dict[str, Any],
+    model_cfg: Dict[str, Any],
+    runtime_tools_cfg: Dict[str, Any],
+    chunks: List[Dict[str, str]],
+):
     render_suggested_questions(company)
 
     for msg in st.session_state.messages:
@@ -880,7 +886,6 @@ def main():
 
     user_input = st.session_state.pop("pending_question", None) or st.chat_input("Message the assistant…")
     if not user_input:
-        render_comparison_lab(demo_mode)
         return
 
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -916,9 +921,10 @@ def main():
                     company,
                     tool_names,
                 )
+                metrics = attach_request_cost(metrics, model_cfg)
             except Exception as exc:
                 answer = f"There was an error calling the model: {exc}"
-                metrics = {
+                metrics = attach_request_cost({
                     "response_time_s": 0.0,
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
@@ -928,13 +934,41 @@ def main():
                     "model": normalize_model(model_cfg.get("default_model", "glm-5-1")),
                     "tools_sent": tool_names,
                     "tools_called": [],
-                }
+                }, model_cfg)
             st.markdown(answer)
             render_message_metrics(metrics)
 
     st.session_state.messages.append({"role": "assistant", "content": answer, "metrics": metrics})
     record_run(user_input, metrics)
-    render_comparison_lab(demo_mode)
+
+
+def main():
+    st.set_page_config(page_title="Workshop Chatbot Template", page_icon="🤖", layout="wide")
+
+    inject_custom_css()
+
+    company = load_json(CONFIG_DIR / "company.json", {})
+    personality = load_json(CONFIG_DIR / "personality.json", {})
+    tools_cfg = load_json(CONFIG_DIR / "tools.json", {})
+    model_cfg = load_json(CONFIG_DIR / "model.json", {})
+
+    logo_path = find_company_logo()
+    chunks = load_company_knowledge()
+    demo_mode = not bool(get_secret("COMPACTIF_API_KEY"))
+
+    runtime_tools_cfg = render_sidebar(company, tools_cfg, model_cfg)
+    render_header(company, logo_path, len(chunks), demo_mode)
+
+    if "messages" not in st.session_state:
+        reset_chat(company.get("welcome_message", "Hello! How can I help?"))
+
+    tab_chat, tab_lab = st.tabs(["Chat", "Comparison lab"])
+
+    with tab_chat:
+        render_chat_tab(company, personality, model_cfg, runtime_tools_cfg, chunks)
+
+    with tab_lab:
+        render_comparison_lab(demo_mode, model_cfg)
 
 
 if __name__ == "__main__":
