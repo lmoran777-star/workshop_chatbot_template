@@ -10,8 +10,12 @@ Students personalize the bot by editing JSON files, adding company documents, ad
 config/
   company.json        -> company name, bot name, goal, target users
   personality.json    -> tone, role, style, safety rules
-  tools.json          -> default tools enabled/disabled
-  model.json          -> model, temperature, max tokens
+  tools.json          -> default tools enabled/disabled, RAG chunk settings
+  model.json          -> model, temperature, max tokens, pricing
+  theme.json          -> colors (badges, metrics, sidebar) — no coding needed
+
+.streamlit/
+  config.toml         -> quick Streamlit theme (4 main colors, commented)
 
 company_data/
   Put PDFs, DOCX, TXT, MD, CSV, or JSON files here
@@ -37,6 +41,14 @@ The app now shows after every assistant answer:
 When the API returns official `usage` fields, the app shows real API usage. If usage is not returned, or if the app is in demo mode, it shows an estimated token count so students can still compare behavior.
 
 Students can also turn tools on/off directly from the sidebar. This is useful for comparing the same question with and without tools.
+
+## Customize colors (no coding)
+
+**Quick (4 colors):** edit `.streamlit/config.toml` → `[theme]` section. Comments explain each field.
+
+**Full control (badges, metrics, sidebar):** edit `config/theme.json` → `colors`. See `color_guide` in the same file for what each key does. Use hex codes like `#1A2B3C`.
+
+After saving in GitHub, refresh or redeploy the app.
 
 ## Fast local run
 

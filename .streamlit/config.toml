@@ -1,9 +1,26 @@
+# =============================================================================
+# Streamlit theme — quick color changes (no coding)
+# =============================================================================
+# These 4 colors control Streamlit buttons, tabs, inputs and base layout.
+# For MORE control (badges, metrics, sidebar details), edit:
+#   config/theme.json
+# =============================================================================
+
 [theme]
 base = "light"
+
+# Main brand / accent color (active tab underline, primary buttons, links)
 primaryColor = "#334155"
+
+# Page background
 backgroundColor = "#F8FAFC"
+
+# Sidebar and card backgrounds
 secondaryBackgroundColor = "#FFFFFF"
+
+# Default text color
 textColor = "#0F172A"
+
 font = "sans serif"
 
 [server]

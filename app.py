@@ -57,6 +57,53 @@ def load_json(path: Path, fallback: Dict[str, Any]) -> Dict[str, Any]:
         return fallback
 
 
+DEFAULT_THEME_COLORS = {
+    "page_background": "#F8FAFC",
+    "sidebar_background": "#FFFFFF",
+    "primary_accent": "#334155",
+    "title_text": "#0F172A",
+    "body_text": "#475569",
+    "muted_text": "#64748B",
+    "border": "#E2E8F0",
+    "metrics_background": "#F1F5F9",
+    "metrics_text": "#64748B",
+    "chip_default_background": "#F8FAFC",
+    "chip_default_text": "#475569",
+    "chip_company_background": "#FFFFFF",
+    "chip_company_text": "#334155",
+    "chip_live_background": "#F0FDF4",
+    "chip_live_text": "#15803D",
+    "chip_live_border": "#BBF7D0",
+    "chip_demo_background": "#FFF7ED",
+    "chip_demo_text": "#C2410C",
+    "chip_demo_border": "#FED7AA",
+    "chip_warn_background": "#FFFBEB",
+    "chip_warn_text": "#B45309",
+    "chip_warn_border": "#FDE68A",
+    "suggested_button_background": "#FFFFFF",
+    "suggested_button_text": "#334155",
+    "suggested_button_border": "#E2E8F0",
+}
+
+
+def normalize_hex_color(value: Any, fallback: str) -> str:
+    text = str(value or "").strip()
+    if re.fullmatch(r"#[0-9A-Fa-f]{6}", text):
+        return text
+    if re.fullmatch(r"#[0-9A-Fa-f]{3}", text):
+        return f"#{text[1]*2}{text[2]*2}{text[3]*2}"
+    return fallback
+
+
+def load_theme() -> Dict[str, str]:
+    raw = load_json(CONFIG_DIR / "theme.json", {})
+    colors = raw.get("colors", {})
+    theme = {}
+    for key, default in DEFAULT_THEME_COLORS.items():
+        theme[key] = normalize_hex_color(colors.get(key), default)
+    return theme
+
+
 def get_secret(name: str, default: str = "") -> str:
     try:
         if name in st.secrets:
@@ -604,119 +651,124 @@ def reset_chat(welcome: str):
     st.session_state.pop("pending_question", None)
 
 
-def inject_custom_css():
+def inject_custom_css(theme: Dict[str, str]):
+    c = theme
     st.markdown(
-        """
+        f"""
         <style>
-            .block-container {
+            .stApp {{
+                background: {c["page_background"]};
+            }}
+            .block-container {{
                 padding-top: 2.5rem;
                 padding-bottom: 1.5rem;
                 max-width: 1100px;
                 padding-left: 2rem;
                 padding-right: 2rem;
-            }
+            }}
             [data-testid="stHorizontalBlock"],
-            [data-testid="column"] {
+            [data-testid="column"] {{
                 overflow: visible !important;
-            }
-            [data-testid="stSidebar"] {
-                background: #FFFFFF;
-                border-right: 1px solid #E2E8F0;
-            }
-            [data-testid="stSidebar"] .block-container {
+            }}
+            [data-testid="stSidebar"] {{
+                background: {c["sidebar_background"]};
+                border-right: 1px solid {c["border"]};
+            }}
+            [data-testid="stSidebar"] .block-container {{
                 padding-top: 1.25rem;
-            }
-            .sidebar-section {
+            }}
+            .sidebar-section {{
                 font-size: 0.72rem;
                 font-weight: 700;
                 letter-spacing: 0.08em;
                 text-transform: uppercase;
-                color: #64748B;
+                color: {c["muted_text"]};
                 margin: 1.25rem 0 0.5rem 0;
-            }
-            .metrics-pill {
+            }}
+            .metrics-pill {{
                 display: inline-block;
                 margin-top: 0.35rem;
                 padding: 0.3rem 0.7rem;
                 border-radius: 8px;
-                background: #F1F5F9;
-                color: #64748B;
+                background: {c["metrics_background"]};
+                color: {c["metrics_text"]};
                 font-size: 0.75rem;
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            }
-            .hint-label {
+            }}
+            .hint-label {{
                 font-size: 0.82rem;
-                color: #64748B;
+                color: {c["muted_text"]};
                 margin: 0.25rem 0 0.5rem 0;
-            }
-            div[data-testid="stChatMessage"] {
+            }}
+            div[data-testid="stChatMessage"] {{
                 border-radius: 12px;
-            }
-            div[data-testid="stChatInput"] textarea {
+            }}
+            div[data-testid="stChatInput"] textarea {{
                 border-radius: 12px !important;
-            }
-            .stButton > button[kind="secondary"] {
+            }}
+            .stButton > button[kind="secondary"] {{
                 border-radius: 999px;
-                border: 1px solid #E2E8F0;
-                background: #FFFFFF;
-                color: #334155;
+                border: 1px solid {c["suggested_button_border"]};
+                background: {c["suggested_button_background"]};
+                color: {c["suggested_button_text"]};
                 font-size: 0.84rem;
-            }
-            [data-testid="stSidebar"] .stButton > button {
+            }}
+            [data-testid="stSidebar"] .stButton > button {{
                 border-radius: 10px;
                 width: 100%;
-            }
-            .app-goal {
-                font-size: 0.95rem;
-                color: #475569;
-                line-height: 1.55;
-                margin: -0.35rem 0 0.75rem 0;
-                max-width: 52rem;
-            }
-            .app-meta {
+            }}
+            .app-meta {{
                 display: flex;
                 flex-wrap: wrap;
                 gap: 0.45rem;
-            }
-            .meta-chip {
+            }}
+            .meta-chip {{
                 display: inline-block;
                 padding: 0.2rem 0.6rem;
                 border-radius: 999px;
                 font-size: 0.76rem;
                 font-weight: 600;
-                border: 1px solid #E2E8F0;
-                background: #F8FAFC;
-                color: #475569;
-            }
-            .meta-chip-company {
-                background: #FFFFFF;
-                color: #334155;
-            }
-            .meta-chip-warn {
-                background: #FFFBEB;
-                color: #B45309;
-                border-color: #FDE68A;
-            }
-            .meta-chip-live {
-                background: #F0FDF4;
-                color: #15803D;
-                border-color: #BBF7D0;
-            }
-            .meta-chip-demo {
-                background: #FFF7ED;
-                color: #C2410C;
-                border-color: #FED7AA;
-            }
-            [data-testid="stMainBlockContainer"] h1 {
-                color: #0F172A !important;
+                border: 1px solid {c["border"]};
+                background: {c["chip_default_background"]};
+                color: {c["chip_default_text"]};
+            }}
+            .meta-chip-company {{
+                background: {c["chip_company_background"]};
+                color: {c["chip_company_text"]};
+            }}
+            .meta-chip-warn {{
+                background: {c["chip_warn_background"]};
+                color: {c["chip_warn_text"]};
+                border-color: {c["chip_warn_border"]};
+            }}
+            .meta-chip-live {{
+                background: {c["chip_live_background"]};
+                color: {c["chip_live_text"]};
+                border-color: {c["chip_live_border"]};
+            }}
+            .meta-chip-demo {{
+                background: {c["chip_demo_background"]};
+                color: {c["chip_demo_text"]};
+                border-color: {c["chip_demo_border"]};
+            }}
+            [data-testid="stMainBlockContainer"] h1 {{
+                color: {c["title_text"]} !important;
                 font-size: 1.75rem !important;
                 font-weight: 700 !important;
                 line-height: 1.3 !important;
                 margin: 0 0 0.35rem 0 !important;
                 padding: 0.25rem 0 0 0 !important;
                 overflow: visible !important;
-            }
-            .header-logo-img {
+            }}
+            [data-testid="stMainBlockContainer"] p,
+            [data-testid="stMainBlockContainer"] .stMarkdown {{
+                color: {c["body_text"]};
+            }}
+            div[data-testid="stTabs"] button[aria-selected="true"] {{
+                color: {c["primary_accent"]} !important;
+                border-bottom-color: {c["primary_accent"]} !important;
+            }}
+            .header-logo-img {{
                 display: block;
                 max-height: 72px;
                 max-width: 120px;
@@ -724,7 +776,7 @@ def inject_custom_css():
                 height: auto;
                 object-fit: contain;
                 margin-left: auto;
-            }
+            }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -831,6 +883,7 @@ def render_sidebar(
             st.rerun()
 
         st.caption("Add data to `/company_data`, a logo to `/company_logo`, and edit `/config` — all in the repo.")
+        st.caption("Colors: quick → `.streamlit/config.toml` · full → `config/theme.json`")
 
     return runtime_tools_cfg
 
@@ -1082,7 +1135,7 @@ def render_chat_tab(
 def main():
     st.set_page_config(page_title="Workshop Chatbot Template", page_icon="🤖", layout="wide")
 
-    inject_custom_css()
+    inject_custom_css(load_theme())
 
     company = load_json(CONFIG_DIR / "company.json", {})
     personality = load_json(CONFIG_DIR / "personality.json", {})
