@@ -1,0 +1,20 @@
+{
+  "tools": {
+    "search_company_data": {
+      "enabled": true,
+      "student_note": "Lets the model search uploaded files and files in company_data. Recommended ON."
+    },
+    "calculator": {
+      "enabled": true,
+      "student_note": "Useful for prices, discounts, measurements, simple budgets, and technical calculations."
+    },
+    "current_datetime": {
+      "enabled": true,
+      "student_note": "Useful when the answer depends on today's date or time."
+    },
+    "create_support_ticket": {
+      "enabled": false,
+      "student_note": "Demo tool. Turn ON if your bot should simulate escalation to a human."
+    }
+  }
+}

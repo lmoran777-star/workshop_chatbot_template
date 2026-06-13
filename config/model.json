@@ -1,0 +1,8 @@
+{
+  "base_url": "https://api.compactif.ai/v1",
+  "default_model": "glm-5-1",
+  "temperature": 0.4,
+  "max_tokens": 800,
+  "use_tools": true,
+  "workshop_mode": true
+}
